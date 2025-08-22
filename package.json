@@ -13,6 +13,6 @@
     "prepack": "npm run build"
   },
   "devDependencies": {
-    "esbuild": "^0.13.14"
+    "esbuild": "^0.13.15"
   }
 }
