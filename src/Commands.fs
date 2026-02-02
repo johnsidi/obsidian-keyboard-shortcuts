@@ -229,51 +229,70 @@ let rec copyNextCodeBlock (plugin: ExtendedPlugin<PluginSettings>) =
         )
 
 let rec copyCodeBlock (plugin: ExtendedPlugin<PluginSettings>) =
-    Command.forMenu
+    Command.forEditor
         (nameof copyCodeBlock)
         "Copy Code Block"
         "book-copy"
-        (fun _ ->
-            let codeblocks = plugin.app |> Content.getCodeBlocks
+        (fun editor ->
+            let codeblocksOpt = plugin.app |> Content.getCodeBlocks
 
-            if codeblocks.IsNone then
+            match codeblocksOpt with
+            | None ->
                 None
-            else
+            | Some codeblocks ->
 
-                let codeblocks = codeblocks.Value
+                let cursor = editor.getCursor ()
+                let cursorLine = int cursor.line
 
-                let modal =
-                    plugin.app
-                    |> SuggestModal.create
-                    |> SuggestModal.withGetSuggestions (fun queryInput ->
-                        let query = obsidian.prepareQuery queryInput
+                match
+                    codeblocks
+                    |> Seq.tryFind (fun b ->
+                        cursorLine >= (b.startLine - 1)
+                        && cursorLine <= (b.endLine + 1))
+                with
+                | Some b ->
+                    $"copied:\n{b.content.Substring(0, min b.content.Length 50)}"
+                    |> U2.Case1
+                    |> obsidian.Notice.Create
+                    |> ignore
 
-                        let matches =
-                            codeblocks
-                            |> Seq.map (fun f ->
-                                let text = f.content
-                                f, obsidian.fuzzySearch (query, text)
-                            )
-                            |> Seq.where (fun f -> snd f |> Option.isSome)
-                            |> Seq.map fst
+                    Clipboard.write b.content |> ignore
+                    None
 
-                        matches |> ResizeArray
-                    )
-                    |> SuggestModal.withRenderSuggestion (fun f elem ->
-                        elem.innerText <- f.content
-                    )
-                    |> SuggestModal.withOnChooseSuggestion (fun (f, args) ->
-                        $"copied:\n{f.content.Substring(0, min (f.content.Length) 50)}"
-                        |> U2.Case1
-                        |> obsidian.Notice.Create
-                        |> ignore
+                | None ->
+                    let modal =
+                        plugin.app
+                        |> SuggestModal.create
+                        |> SuggestModal.withGetSuggestions (fun queryInput ->
+                            let query = obsidian.prepareQuery queryInput
 
-                        Clipboard.write f.content |> ignore
-                    )
+                            let matches =
+                                codeblocks
+                                |> Seq.map (fun f ->
+                                    let text = f.content
+                                    f, obsidian.fuzzySearch (query, text)
+                                )
+                                |> Seq.where (fun f -> snd f |> Option.isSome)
+                                |> Seq.map fst
 
-                modal.``open`` ()
-                None
+                            matches |> ResizeArray
+                        )
+                        |> SuggestModal.withRenderSuggestion (fun f elem ->
+                            elem.innerText <- f.content
+                        )
+                        |> SuggestModal.withOnChooseSuggestion (fun (f, args) ->
+                            $"copied:\n{f.content.Substring(0, min f.content.Length 50)}"
+                            |> U2.Case1
+                            |> obsidian.Notice.Create
+                            |> ignore
+
+                            Clipboard.write f.content |> ignore
+                        )
+
+                    modal.``open`` ()
+                    None
         )
+
 
 let rec tagSearch (plugin: ExtendedPlugin<PluginSettings>) =
     Command.forMenu
