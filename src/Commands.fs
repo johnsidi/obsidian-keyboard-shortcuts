@@ -234,32 +234,32 @@ let rec copyCodeBlock (plugin: ExtendedPlugin<PluginSettings>) =
         "Copy Code Block"
         "book-copy"
         (fun editor ->
-            let codeblocksOpt = plugin.app |> Content.getCodeBlocks
+            let codeblocks = plugin.app |> Content.getCodeBlocks
 
-            match codeblocksOpt with
-            | None ->
-                None
-            | Some codeblocks ->
-
+            if codeblocks.IsNone then
+                ret
+            else
+                let codeblocks = codeblocks.Value
                 let cursor = editor.getCursor ()
                 let cursorLine = int cursor.line
 
-                match
+                // Check if cursor is inside a code block
+                let blockAtCursor =
                     codeblocks
                     |> Seq.tryFind (fun b ->
-                        cursorLine >= (b.startLine - 1)
-                        && cursorLine <= (b.endLine + 1))
-                with
-                | Some b ->
-                    $"copied:\n{b.content.Substring(0, min b.content.Length 50)}"
+                        cursorLine >= b.startLine && cursorLine <= b.endLine)
+
+                match blockAtCursor with
+                | Some block ->
+                    // Cursor is inside a code block - copy it automatically
+                    $"copied:\n{block.content.Substring(0, min (block.content.Length) 50)}"
                     |> U2.Case1
                     |> obsidian.Notice.Create
                     |> ignore
-
-                    Clipboard.write b.content |> ignore
-                    None
-
+                    Clipboard.write block.content |> ignore
+                    ret
                 | None ->
+                    // Cursor is not in a code block - show modal
                     let modal =
                         plugin.app
                         |> SuggestModal.create
@@ -281,7 +281,7 @@ let rec copyCodeBlock (plugin: ExtendedPlugin<PluginSettings>) =
                             elem.innerText <- f.content
                         )
                         |> SuggestModal.withOnChooseSuggestion (fun (f, args) ->
-                            $"copied:\n{f.content.Substring(0, min f.content.Length 50)}"
+                            $"copied:\n{f.content.Substring(0, min (f.content.Length) 50)}"
                             |> U2.Case1
                             |> obsidian.Notice.Create
                             |> ignore
@@ -290,9 +290,8 @@ let rec copyCodeBlock (plugin: ExtendedPlugin<PluginSettings>) =
                         )
 
                     modal.``open`` ()
-                    None
+                    ret
         )
-
 
 let rec tagSearch (plugin: ExtendedPlugin<PluginSettings>) =
     Command.forMenu
